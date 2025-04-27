@@ -60,26 +60,34 @@ async def stop_seq(client, message: Message):
     user_id = message.from_user.id
     seq_name = seq_active.get(user_id)
     if seq_name:
-        await message.reply("🛠️ Traitement en cours...")
-
-        files = user_seq_files.get(user_id, {}).get(seq_name, [])
-        total_files = len(files)
-
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
-        tasks = []
-        progress_message = await message.reply(f"⏳ 0/{total_files} fichiers traités...")
-
-        for idx, msg in enumerate(files):
-            tasks.append(process_file(client, message, msg, idx + 1, total_files, progress_message, semaphore))
-
-        await asyncio.gather(*tasks)
-
-        # Nettoyage
-        seq_active.pop(user_id, None)
-        user_seq_files[user_id].pop(seq_name, None)
-        await progress_message.edit(f"✅ Tous les fichiers de la séquence '{seq_name}' traités avec succès !")
+        # Ne pas traiter les fichiers immédiatement
+        await message.reply(f"✅ Séquence '{seq_name}' sauvegardée. Envoie /exec pour commencer le traitement des fichiers.")
     else:
         await message.reply("❌ Aucun mode Séquence actif.")
+
+@app.on_message(filters.command("exec") & filters.private)
+async def exec_seq(client, message: Message):
+    seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
+    if seq_name:
+        seq_files = user_seq_files.get(message.from_user.id, {}).get(seq_name, [])
+        if seq_files:
+            for idx, msg in enumerate(seq_files):
+                await process_file(client, message, msg, idx + 1, len(seq_files), None, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
+            await message.reply(f"✅ Séquence '{seq_name}' exécutée.")
+        else:
+            await message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
+    else:
+        await message.reply("❌ Veuillez fournir un nom de séquence.")
+
+@app.on_message(filters.command("view_seqs") & filters.private)
+async def view_seqs(client, message: Message):
+    user_id = message.from_user.id
+    seqs = user_seq_files.get(user_id, {})
+    if seqs:
+        seq_list = "\n".join([f"{seq_name} - {len(files)} fichiers" for seq_name, files in seqs.items()])
+        await message.reply(f"📋 Séquences enregistrées :\n{seq_list}")
+    else:
+        await message.reply("❌ Aucune séquence enregistrée.")
 
 @app.on_message(filters.command("pause") & filters.private)
 async def pause_processing(client, message: Message):
@@ -95,32 +103,6 @@ async def resume_processing(client, message: Message):
 async def cancel_processing(client, message: Message):
     cancelled_users[message.from_user.id] = True
     await message.reply("❌ Traitement annulé.")
-
-@app.on_message(filters.command("exec") & filters.private)
-async def exec_seq(client, message: Message):
-    seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
-    if seq_name:
-        seq_files = user_seq_files.get(message.from_user.id, {}).get(seq_name, [])
-        if seq_files:
-            for msg in seq_files:
-                await process_file(client, message, msg, 1, len(seq_files), None, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
-            await message.reply(f"✅ Séquence '{seq_name}' exécutée.")
-        else:
-            await message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
-    else:
-        await message.reply("❌ Veuillez fournir un nom de séquence.")
-
-@app.on_message(filters.command("delete") & filters.private)
-async def delete_seq(client, message: Message):
-    seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
-    if seq_name:
-        seq_files = user_seq_files.get(message.from_user.id, {}).pop(seq_name, None)
-        if seq_files:
-            await message.reply(f"✅ Séquence '{seq_name}' supprimée.")
-        else:
-            await message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
-    else:
-        await message.reply("❌ Veuillez fournir un nom de séquence.")
 
 @app.on_message(filters.command("replace_rule") & filters.private)
 async def replace_rule(client, message: Message):
