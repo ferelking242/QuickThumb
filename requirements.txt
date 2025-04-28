@@ -1,3 +1,4 @@
 pyrogram==2.0.0
 pyromod==1.0.0
 moviepy==2.1.2
+tgcrypto
