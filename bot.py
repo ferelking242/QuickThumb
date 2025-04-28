@@ -49,45 +49,67 @@ async def delete_thumbnails(client, message: Message):
 @app.on_message(filters.command("seq_start") & filters.private)
 async def start_seq(client, message: Message):
     seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else "default_seq"
-    seq_active[message.from_user.id] = seq_name
-    user_seq_files.setdefault(message.from_user.id, {}).setdefault(seq_name, [])
-    paused_users[message.from_user.id] = False
-    cancelled_users[message.from_user.id] = False
-    await message.reply(f"🚀 Mode Séquence '{seq_name}' activé ! Envoie tes fichiers.")
+    user_id = message.from_user.id
+
+    seq_active[user_id] = seq_name
+    user_seq_files.setdefault(user_id, {}).setdefault(seq_name, [])
+
+    await message.reply(f"🚀 Séquence '{seq_name}' démarrée ! Envoie tes fichiers à traiter.")
 
 @app.on_message(filters.command("seq_stop") & filters.private)
 async def stop_seq(client, message: Message):
     user_id = message.from_user.id
     seq_name = seq_active.get(user_id)
+
     if seq_name:
-        # Ne pas traiter les fichiers immédiatement
-        await message.reply(f"✅ Séquence '{seq_name}' sauvegardée. Envoie /exec pour commencer le traitement des fichiers.")
+        files = user_seq_files[user_id].get(seq_name, [])
+        total_files = len(files)
+        
+        await message.reply(f"📋 Séquence '{seq_name}' enregistrée avec {total_files} fichier(s).")
+        
+        # Sauvegarder la séquence et préparer les fichiers pour traitement ultérieur
+        seq_active.pop(user_id, None)
     else:
-        await message.reply("❌ Aucun mode Séquence actif.")
+        await message.reply("❌ Aucune séquence active pour l'utilisateur.")
+
+@app.on_message(filters.command("view_seqs") & filters.private)
+async def view_seqs(client, message: Message):
+    user_id = message.from_user.id
+    seqs = user_seq_files.get(user_id, {})
+
+    if seqs:
+        seq_list = "\n".join([f"{seq}: {len(files)} fichier(s)" for seq, files in seqs.items()])
+        await message.reply(f"📋 Séquences enregistrées :\n{seq_list}")
+    else:
+        await message.reply("❌ Aucune séquence trouvée.")
 
 @app.on_message(filters.command("exec") & filters.private)
 async def exec_seq(client, message: Message):
     seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
+    user_id = message.from_user.id
+
     if seq_name:
-        seq_files = user_seq_files.get(message.from_user.id, {}).get(seq_name, [])
+        seq_files = user_seq_files.get(user_id, {}).get(seq_name, [])
         if seq_files:
-            for idx, msg in enumerate(seq_files):
-                await process_file(client, message, msg, idx + 1, len(seq_files), None, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
+            for idx, file_message in enumerate(seq_files):
+                # Traiter le fichier ici (ajouter la miniature, renommer, etc.)
+                await file_message.edit(f"📦 Traitement du fichier {idx + 1}/{len(seq_files)}...")
+            
             await message.reply(f"✅ Séquence '{seq_name}' exécutée.")
         else:
             await message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
     else:
         await message.reply("❌ Veuillez fournir un nom de séquence.")
 
-@app.on_message(filters.command("view_seqs") & filters.private)
-async def view_seqs(client, message: Message):
+@app.on_message(filters.document | filters.video | filters.photo & filters.private)
+async def handle_files(client, message: Message):
     user_id = message.from_user.id
-    seqs = user_seq_files.get(user_id, {})
-    if seqs:
-        seq_list = "\n".join([f"{seq_name} - {len(files)} fichiers" for seq_name, files in seqs.items()])
-        await message.reply(f"📋 Séquences enregistrées :\n{seq_list}")
-    else:
-        await message.reply("❌ Aucune séquence enregistrée.")
+    seq_name = seq_active.get(user_id)
+
+    if seq_name:
+        # Ajouter le fichier à la séquence active
+        user_seq_files[user_id][seq_name].append(message)
+        await message.reply(f"✅ Fichier ajouté à la séquence '{seq_name}'.")
 
 @app.on_message(filters.command("pause") & filters.private)
 async def pause_processing(client, message: Message):
