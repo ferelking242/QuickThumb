@@ -3,7 +3,7 @@ import shutil
 import asyncio
 import random
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 # -- CONFIG --
 API_ID = "23992653"
@@ -48,38 +48,84 @@ async def delete_thumbnails(client, message: Message):
 
 @app.on_message(filters.command("seq_start") & filters.private)
 async def start_seq(client, message: Message):
-    seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else "default_seq"
-    seq_active[message.from_user.id] = seq_name
-    user_seq_files.setdefault(message.from_user.id, {}).setdefault(seq_name, [])
-    paused_users[message.from_user.id] = False
-    cancelled_users[message.from_user.id] = False
-    await message.reply(f"🚀 Mode Séquence '{seq_name}' activé ! Envoie tes fichiers.")
+    seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else "FK"
+    user_id = message.from_user.id
+
+    seq_active[user_id] = seq_name
+    user_seq_files.setdefault(user_id, {}).setdefault(seq_name, [])
+
+    await message.reply(f"🚀 Séquence '{seq_name}' démarrée ! Envoie tes fichiers à traiter.")
 
 @app.on_message(filters.command("seq_stop") & filters.private)
 async def stop_seq(client, message: Message):
     user_id = message.from_user.id
     seq_name = seq_active.get(user_id)
+
     if seq_name:
-        await message.reply("🛠️ Traitement en cours...")
-
-        files = user_seq_files.get(user_id, {}).get(seq_name, [])
+        files = user_seq_files[user_id].get(seq_name, [])
         total_files = len(files)
-
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
-        tasks = []
-        progress_message = await message.reply(f"⏳ 0/{total_files} fichiers traités...")
-
-        for idx, msg in enumerate(files):
-            tasks.append(process_file(client, message, msg, idx + 1, total_files, progress_message, semaphore))
-
-        await asyncio.gather(*tasks)
-
-        # Nettoyage
+        
+        await message.reply(f"📋 Séquence '{seq_name}' enregistrée avec {total_files} fichier(s).")
+        
+        # Sauvegarder la séquence et préparer les fichiers pour traitement ultérieur
         seq_active.pop(user_id, None)
-        user_seq_files[user_id].pop(seq_name, None)
-        await progress_message.edit(f"✅ Tous les fichiers de la séquence '{seq_name}' traités avec succès !")
     else:
-        await message.reply("❌ Aucun mode Séquence actif.")
+        await message.reply("❌ Aucune séquence active pour l'utilisateur.")
+
+@app.on_message(filters.command("view_seqs") & filters.private)
+async def view_seqs(client, message: Message):
+    user_id = message.from_user.id
+    seqs = user_seq_files.get(user_id, {})
+
+    if seqs:
+        seq_list = "\n".join([f"{seq}: {len(files)} fichier(s)" for seq, files in seqs.items()])
+        await message.reply(f"📋 Séquences enregistrées :\n{seq_list}")
+    else:
+        await message.reply("❌ Aucune séquence trouvée.")
+
+@app.on_message(filters.command("exec") & filters.private)
+async def exec_seq(client, message: Message):
+    user_id = message.from_user.id
+    seqs = user_seq_files.get(user_id, {})
+
+    if seqs:
+        buttons = [
+            [InlineKeyboardButton(seq_name, callback_data=f"exec_{seq_name}")]
+            for seq_name in seqs.keys()
+        ]
+        reply_markup = InlineKeyboardMarkup(buttons)
+        await message.reply("Choisis la séquence à exécuter :", reply_markup=reply_markup)
+    else:
+        await message.reply("❌ Aucune séquence trouvée.")
+
+@app.on_callback_query()
+async def callback_exec_seq(client, callback_query):
+    seq_name = callback_query.data.split("_")[1]
+    user_id = callback_query.from_user.id
+    seq_files = user_seq_files.get(user_id, {}).get(seq_name, [])
+
+    if seq_files:
+        progress_message = await callback_query.message.reply(f"📦 Début du traitement de la séquence '{seq_name}'...")
+
+        for idx, file_message in enumerate(seq_files):
+            # Envoie un nouveau message pour chaque fichier
+            progress_msg = await callback_query.message.reply(f"📦 Traitement du fichier {idx + 1}/{len(seq_files)}...")
+
+            await process_file(client, callback_query.message, file_message, idx + 1, len(seq_files), progress_msg, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
+
+        await progress_message.edit(f"✅ Séquence '{seq_name}' exécutée avec succès.")
+    else:
+        await callback_query.message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
+
+@app.on_message(filters.document | filters.video | filters.photo & filters.private)
+async def handle_files(client, message: Message):
+    user_id = message.from_user.id
+    seq_name = seq_active.get(user_id)
+
+    if seq_name:
+        # Ajouter le fichier à la séquence active
+        user_seq_files[user_id][seq_name].append(message)
+        await message.reply(f"✅ Fichier ajouté à la séquence '{seq_name}'.")
 
 @app.on_message(filters.command("pause") & filters.private)
 async def pause_processing(client, message: Message):
@@ -95,32 +141,6 @@ async def resume_processing(client, message: Message):
 async def cancel_processing(client, message: Message):
     cancelled_users[message.from_user.id] = True
     await message.reply("❌ Traitement annulé.")
-
-@app.on_message(filters.command("exec") & filters.private)
-async def exec_seq(client, message: Message):
-    seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
-    if seq_name:
-        seq_files = user_seq_files.get(message.from_user.id, {}).get(seq_name, [])
-        if seq_files:
-            for msg in seq_files:
-                await process_file(client, message, msg, 1, len(seq_files), None, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
-            await message.reply(f"✅ Séquence '{seq_name}' exécutée.")
-        else:
-            await message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
-    else:
-        await message.reply("❌ Veuillez fournir un nom de séquence.")
-
-@app.on_message(filters.command("delete") & filters.private)
-async def delete_seq(client, message: Message):
-    seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
-    if seq_name:
-        seq_files = user_seq_files.get(message.from_user.id, {}).pop(seq_name, None)
-        if seq_files:
-            await message.reply(f"✅ Séquence '{seq_name}' supprimée.")
-        else:
-            await message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
-    else:
-        await message.reply("❌ Veuillez fournir un nom de séquence.")
 
 @app.on_message(filters.command("replace_rule") & filters.private)
 async def replace_rule(client, message: Message):
@@ -174,13 +194,16 @@ async def process_file(client, command_message, file_message, counter, total_fil
         new_name = f"downloads/{name}{ext}"
         os.rename(file_path, new_name)
 
-        await file_message.edit(f"📦 Traitement du fichier {counter}/{total_files}...")
+        await file_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter/total_files*100)}%)")
 
-        # Process (ajouter la miniature, etc)
-        await asyncio.sleep(1)  # Simuler le traitement
+        # Renvoi du fichier modifié
+        await client.send_document(user_id, new_name, caption="Fichier modifié avec succès.")
 
         if progress_message:
             await progress_message.edit(f"⏳ {counter}/{total_files} fichiers traités...")
+
+        # Suppression du fichier après l'envoi
+        os.remove(new_name)
 
 # -- LANCER LE BOT --
 
