@@ -21,6 +21,7 @@ cancelled_users = {}       # user_id: bool
 MAX_CONCURRENT_TASKS = 3   # Nombre de fichiers traités en parallèle
 replace_rules = {}         # user_id: list of (search, replace)
 send_location = {}         # user_id: "me" or "channel"
+user_channels = {}         # user_id: channel_id
 
 # -- SETUP DOSSIER --
 if not os.path.exists("downloads"):
@@ -51,6 +52,17 @@ async def callback_set_send_location(client, callback_query):
         await callback_query.answer("Les fichiers seront envoyés au canal.")
     else:
         await callback_query.answer("Option invalide.")
+
+@app.on_message(filters.command("set_channel") & filters.private)
+async def set_channel(client, message: Message):
+    # On vérifie que l'utilisateur donne un canal valide
+    if len(message.text.split()) > 1:
+        channel_id = message.text.split()[1]  # on récupère l'ID du canal
+        user_id = message.from_user.id
+        user_channels[user_id] = channel_id
+        await message.reply(f"✅ Canal défini pour l'envoi des fichiers : {channel_id}")
+    else:
+        await message.reply("❌ Tu dois spécifier l'ID du canal après la commande. Exemple : /set_channel @MonCanal")
 
 @app.on_message(filters.command("set_thumb") & filters.private)
 async def set_thumbnail(client, message: Message):
@@ -229,7 +241,11 @@ async def process_file(client, command_message, file_message, counter, total_fil
                 if location == "me":
                     await client.send_document(user_id, new_name, caption=f"Fichier modifié avec succès.")
                 elif location == "channel":
-                    await client.send_document('@OfficialGamersStation', new_name, caption="Fichier modifié avec succès.")
+                    channel_id = user_channels.get(user_id)
+                    if channel_id:
+                        await client.send_document(channel_id, new_name, caption="Fichier modifié avec succès.")
+                    else:
+                        await client.send_message(user_id, "❌ Canal non défini. Utilise /set_channel pour définir un canal.")
 
             # Supprimer le fichier après envoi
             os.remove(new_name)
