@@ -86,16 +86,18 @@ async def view_seqs(client, message: Message):
 @app.on_message(filters.command("exec") & filters.private)
 async def exec_seq(client, message: Message):
     seq_name = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
-    user_id = message.from_user.id
-
     if seq_name:
-        seq_files = user_seq_files.get(user_id, {}).get(seq_name, [])
+        seq_files = user_seq_files.get(message.from_user.id, {}).get(seq_name, [])
         if seq_files:
+            progress_message = await message.reply(f"📦 Début du traitement de la séquence '{seq_name}'...")
+
             for idx, file_message in enumerate(seq_files):
-                # Traiter le fichier ici (ajouter la miniature, renommer, etc.)
-                await file_message.edit(f"📦 Traitement du fichier {idx + 1}/{len(seq_files)}...")
-            
-            await message.reply(f"✅ Séquence '{seq_name}' exécutée.")
+                # Envoie un nouveau message pour chaque fichier
+                progress_msg = await message.reply(f"📦 Traitement du fichier {idx + 1}/{len(seq_files)}...")
+
+                await process_file(client, message, file_message, idx + 1, len(seq_files), progress_msg, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
+
+            await progress_message.edit(f"✅ Séquence '{seq_name}' exécutée avec succès.")
         else:
             await message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
     else:
