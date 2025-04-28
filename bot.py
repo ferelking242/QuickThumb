@@ -158,6 +158,7 @@ async def delete_rule(client, message: Message):
 
 # -- PROCESSUS PRINCIPAL --
 
+# Processus principal de traitement du fichier
 async def process_file(client, command_message, file_message, counter, total_files, progress_message, semaphore):
     user_id = command_message.from_user.id
     async with semaphore:
@@ -179,18 +180,14 @@ async def process_file(client, command_message, file_message, counter, total_fil
         new_name = f"downloads/{name}{ext}"
         os.rename(file_path, new_name)
 
-        # Si un message de progression existe, on l'édite ou on en crée un nouveau
-        if progress_message:
-            await progress_message.edit(f"📦 Traitement du fichier {counter}/{total_files}... ({int(counter / total_files * 100)}%)")
-        else:
-            progress_message = await command_message.reply(f"📦 Traitement du fichier {counter}/{total_files}... ({int(counter / total_files * 100)}%)")
+        # Envoi d'un nouveau message de progression si nécessaire
+        progress_message = await command_message.reply(f"📦 Traitement du fichier {counter}/{total_files}... ({int(counter / total_files * 100)}%)")
 
         # Process (ajouter la miniature, etc)
         await asyncio.sleep(1)  # Simuler le traitement
 
-        # Mettre à jour le message de progression
-        if progress_message:
-            await progress_message.edit(f"⏳ {counter}/{total_files} fichiers traités...")
+        # Mettre à jour le message de progression à chaque fichier traité
+        await progress_message.edit(f"⏳ {counter}/{total_files} fichiers traités...")
 
 # -- LANCER LE BOT --
 
