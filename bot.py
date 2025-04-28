@@ -199,7 +199,7 @@ async def process_file(client, command_message, file_message, counter, total_fil
             await progress_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter/total_files*100)}%)")
 
         # Vérifier que l'utilisateur n'est pas le bot avant d'envoyer le fichier
-        if user_id != client.bot.id:
+        if user_id != client.me.id:  # Utilisation de client.me.id pour l'ID du bot
             # Renvoi du fichier modifié
             await client.send_document(user_id, new_name, caption="Fichier modifié avec succès.")
         else:
