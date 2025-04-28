@@ -6,24 +6,9 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyromod import listen
 
-async def fix_time():
-    await asyncio.sleep(5)
-
 BOT_TOKEN = "7634028476:AAHDjeRCagDKlxtVmRV3SoBBRgAG4nG0tbw"
 API_ID = "23992653"
 API_HASH = "ef7ad3a6a3e88b487108cd5242851ed4"
-
-Bot = Client(
-    "Thumb-Bot",
-    bot_token=BOT_TOKEN,
-    api_id=API_ID,
-    api_hash=API_HASH,
-    workdir=".", 
-    in_memory=True,
-    takeout=None,
-    test_mode=False,
-    sleep_threshold=60,
-)
 
 START_TXT = """
 👋 Hi {}, I am a Thumbnail Setter and File Renamer Bot.
@@ -69,6 +54,17 @@ async def progress_bar(current, total, message, task="Uploading"):
         await message.edit(text)
     except:
         pass
+
+
+Bot = Client(
+    "Thumb-Bot",
+    bot_token=BOT_TOKEN,
+    api_id=API_ID,
+    api_hash=API_HASH,
+    workdir=".", 
+    in_memory=True,
+    sleep_threshold=60,
+)
 
 
 @Bot.on_message(filters.command(["start"]))
@@ -175,7 +171,14 @@ async def handle_individual_file(bot, m):
     # Supprimer le fichier après l'envoi
     await msg.delete()
     os.remove(file_dl_path)
-    
-time.sleep(5)  # Attendre 5 secondes pour que le serveur synchronise son temps
 
-Bot.run()
+
+async def main():
+    await asyncio.sleep(5)  # attendre pour synchroniser l'heure serveur
+    await Bot.start()
+    print("Bot is running...")
+    await Bot.idle()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
