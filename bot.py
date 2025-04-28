@@ -163,26 +163,32 @@ async def process_file(client, command_message, file_message, counter, total_fil
     async with semaphore:
         while paused_users.get(user_id, False) or cancelled_users.get(user_id, False):
             await asyncio.sleep(1)
-        
-        file_path = await file_message.download(file_name=f"downloads/file_{random.randint(1,99999)}")
+
+        # Télécharger le fichier
+        file_path = await file_message.download(file_name=f"downloads/file_{random.randint(1, 99999)}")
         thumb_list = user_thumbnails.get(user_id, [])
         thumb_path = thumb_list[(counter - 1) % len(thumb_list)] if thumb_list else None
 
         base_name = os.path.basename(file_path)
         name, ext = os.path.splitext(base_name)
-        
+
         # Remplacer les mots dans le nom
         for search, replace in replace_rules.get(user_id, []):
             name = name.replace(search, replace)
-        
+
         new_name = f"downloads/{name}{ext}"
         os.rename(file_path, new_name)
 
-        await file_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter/total_files*100)}%)")
+        # Si un message de progression existe, on l'édite ou on en crée un nouveau
+        if progress_message:
+            await progress_message.edit(f"📦 Traitement du fichier {counter}/{total_files}... ({int(counter / total_files * 100)}%)")
+        else:
+            progress_message = await command_message.reply(f"📦 Traitement du fichier {counter}/{total_files}... ({int(counter / total_files * 100)}%)")
 
         # Process (ajouter la miniature, etc)
         await asyncio.sleep(1)  # Simuler le traitement
 
+        # Mettre à jour le message de progression
         if progress_message:
             await progress_message.edit(f"⏳ {counter}/{total_files} fichiers traités...")
 
