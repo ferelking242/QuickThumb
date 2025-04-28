@@ -194,11 +194,14 @@ async def process_file(client, command_message, file_message, counter, total_fil
         new_name = f"downloads/{name}{ext}"
         os.rename(file_path, new_name)
 
-        await file_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter/total_files*100)}%)")
+        # Si progress_message existe, on l'édite
+        if progress_message:
+            await progress_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter/total_files*100)}%)")
 
         # Renvoi du fichier modifié
         await client.send_document(user_id, new_name, caption="Fichier modifié avec succès.")
 
+        # Mise à jour du message de progression
         if progress_message:
             await progress_message.edit(f"⏳ {counter}/{total_files} fichiers traités...")
 
