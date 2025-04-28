@@ -20,62 +20,13 @@ paused_users = {}          # user_id: bool
 cancelled_users = {}       # user_id: bool
 MAX_CONCURRENT_TASKS = 3   # Nombre de fichiers traités en parallèle
 replace_rules = {}         # user_id: list of (search, replace)
+send_location = {}         # user_id: "channel" ou "user"
 
 # -- SETUP DOSSIER --
 if not os.path.exists("downloads"):
     os.makedirs("downloads")
 
 # -- COMMANDES BOT --
-@app.on_message(filters.command("set_send_location") & filters.private)
-async def set_send_location(client, message: Message):
-    # Affichage du menu pour choisir où envoyer les fichiers
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("Envoyer à un canal", callback_data="set_send_location_channel"),
-            InlineKeyboardButton("Envoyer à un utilisateur", callback_data="set_send_location_user")
-        ]
-    ])
-    await message.reply("📤 Choisissez où envoyer vos fichiers :", reply_markup=keyboard)
-
-@app.on_callback_query(filters.regex("set_send_location_channel"))
-async def set_send_location_channel(client, callback_query):
-    await callback_query.message.edit("📝 Veuillez fournir l'ID du canal (commence par -100). Exemple : `-1002378715367`")
-    send_location[callback_query.from_user.id] = "channel"
-
-@app.on_callback_query(filters.regex("set_send_location_user"))
-async def set_send_location_user(client, callback_query):
-    await callback_query.message.edit("📝 Veuillez fournir l'ID de l'utilisateur. Exemple : `6889593680`")
-    send_location[callback_query.from_user.id] = "user"
-
-@app.on_message(filters.text & filters.private)
-async def handle_send_location_input(client, message: Message):
-    user_id = message.from_user.id
-    # Vérifie la destination sélectionnée
-    if user_id in send_location:
-        destination_type = send_location[user_id]
-    # Réinitialiser la destination après avoir choisi l'ID
-    send_location[user_id] = None
-
-
-        
-        if destination_type == "channel":
-            try:
-                channel_id = int(message.text.strip())
-                send_location[user_id] = channel_id
-                await message.reply(f"✅ Destination d'envoi définie sur le canal ID : {channel_id}")
-            except ValueError:
-                await message.reply("❌ ID de canal invalide. Veuillez fournir un ID valide.")
-        
-        elif destination_type == "user":
-            try:
-                user_id = int(message.text.strip())
-                send_location[user_id] = user_id
-                await message.reply(f"✅ Destination d'envoi définie sur l'utilisateur ID : {user_id}")
-            except ValueError:
-                await message.reply("❌ ID utilisateur invalide. Veuillez fournir un ID valide.")
-        
-        # Réinitialiser la variable pour éviter des erreurs supplémentaires
-        send_location[user_id] = None
 
 @app.on_message(filters.command("set_thumb") & filters.private)
 async def set_thumbnail(client, message: Message):
@@ -230,7 +181,14 @@ async def process_file(client, command_message, file_message, counter, total_fil
         while paused_users.get(user_id, False) or cancelled_users.get(user_id, False):
             await asyncio.sleep(1)
 
-        file_path = await file_message.download(file_name=f"downloads/file_{random.randint(1,99999)}")
+        # Télécharger le fichier
+        try:
+            file_path = await file_message.download(file_name=f"downloads/file_{random.randint(1,99999)}")
+            print(f"[DEBUG] Fichier téléchargé : {file_path}")
+        except Exception as e:
+            print(f"[ERROR] Erreur lors du téléchargement du fichier : {e}")
+            return
+
         thumb_list = user_thumbnails.get(user_id, [])
         thumb_path = thumb_list[(counter - 1) % len(thumb_list)] if thumb_list else None
 
@@ -243,26 +201,23 @@ async def process_file(client, command_message, file_message, counter, total_fil
 
         new_name = f"downloads/{name}{ext}"
         os.rename(file_path, new_name)
+        print(f"[DEBUG] Nouveau nom de fichier : {new_name}")
 
-        await file_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter/total_files*100)}%)")
+        # Envoi du fichier
+        try:
+            if send_location.get(user_id) == "channel":
+                channel_id = send_location[user_id]
+                await client.send_document(channel_id, new_name, caption=name, thumb=thumb_path)
+            elif send_location.get(user_id) == "user":
+                user_dest_id = send_location[user_id]
+                await client.send_document(user_dest_id, new_name, caption=name, thumb=thumb_path)
 
-        # Vérifier la destination définie
-        destination_id = send_location.get(user_id, None)
-        if destination_id:
-            try:
-                if isinstance(destination_id, int):
-                    # Envoyer le fichier à la destination définie (canal ou utilisateur)
-                    await client.send_document(destination_id, new_name, caption="Fichier modifié avec succès.")
-                    print(f"Fichier envoyé à {destination_id}.")
-                else:
-                    await client.send_document(user_id, new_name, caption="Fichier modifié avec succès.")
-                    print(f"Fichier envoyé à l'utilisateur {user_id}.")
-            except Exception as e:
-                print(f"Erreur lors de l'envoi du fichier à {destination_id}: {str(e)}")
-
-        if progress_message:
-            await progress_message.edit(f"⏳ {counter}/{total_files} fichiers traités...")
-
+            # Mise à jour du message de progression
+            await progress_message.edit(f"✅ Fichier {counter}/{total_files} envoyé avec succès.")
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de l'envoi du fichier : {e}")
+            await progress_message.edit(f"❌ Erreur lors de l'envoi du fichier {counter}/{total_files}.")
+            
 # -- LANCER LE BOT --
 
 app.run()
