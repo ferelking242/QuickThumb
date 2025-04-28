@@ -1,9 +1,13 @@
 import io
 import os
 import time
+import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyromod import listen
+
+async def fix_time():
+    await asyncio.sleep(5)
 
 BOT_TOKEN = "7634028476:AAHDjeRCagDKlxtVmRV3SoBBRgAG4nG0tbw"
 API_ID = "23992653"
@@ -171,6 +175,7 @@ async def handle_individual_file(bot, m):
     # Supprimer le fichier après l'envoi
     await msg.delete()
     os.remove(file_dl_path)
-
+    
+time.sleep(5)  # Attendre 5 secondes pour que le serveur synchronise son temps
 
 Bot.run()
