@@ -14,6 +14,11 @@ Bot = Client(
     bot_token=BOT_TOKEN,
     api_id=API_ID,
     api_hash=API_HASH
+    workdir=".", 
+    in_memory=True,
+    takeout=None,
+    test_mode=False,
+    sleep_threshold=60,
 )
 
 START_TXT = """
