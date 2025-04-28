@@ -7,8 +7,18 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyromod import listen
 
 BOT_TOKEN = "7634028476:AAHDjeRCagDKlxtVmRV3SoBBRgAG4nG0tbw"
-API_ID = "23992653"
+API_ID = 23992653
 API_HASH = "ef7ad3a6a3e88b487108cd5242851ed4"
+
+Bot = Client(
+    "Thumb-Bot",
+    bot_token=BOT_TOKEN,
+    api_id=API_ID,
+    api_hash=API_HASH,
+    workdir=".",
+    in_memory=True,
+    system_timezone=True  # 🔥 Ajouté pour corriger le décalage d'heure
+)
 
 START_TXT = """
 👋 Hi {}, I am a Thumbnail Setter and File Renamer Bot.
@@ -21,10 +31,10 @@ START_BTN = InlineKeyboardMarkup(
     [[InlineKeyboardButton('Source Code', url='https://github.com/soebb/thumb-change-bot')]]
 )
 
-# Global thumb storage
+# Stockage global du thumbnail
 thumb_path = ""
 
-# New: sequence control
+# Contrôle de séquence
 sequence_mode = {}  # {user_id: True/False}
 sequence_files = {}  # {user_id: [messages]}
 
@@ -56,17 +66,6 @@ async def progress_bar(current, total, message, task="Uploading"):
         pass
 
 
-Bot = Client(
-    "Thumb-Bot",
-    bot_token=BOT_TOKEN,
-    api_id=API_ID,
-    api_hash=API_HASH,
-    workdir=".", 
-    in_memory=True,
-    sleep_threshold=60,
-)
-
-
 @Bot.on_message(filters.command(["start"]))
 async def start(bot, update):
     text = START_TXT.format(update.from_user.mention)
@@ -96,7 +95,7 @@ async def seq_stop(bot, m):
     if not sequence_mode.get(user_id):
         await m.reply_text("⚠️ Vous n'avez pas démarré de séquence. Tapez `/seq_start` d'abord.")
         return
-    
+
     files = sequence_files.get(user_id, [])
     if not files:
         await m.reply_text("⚠️ Aucun fichier à traiter.")
@@ -109,7 +108,7 @@ async def seq_stop(bot, m):
     for file_message in files:
         await handle_individual_file(bot, file_message)
 
-    # Reset
+    # Réinitialiser
     sequence_mode[user_id] = False
     sequence_files[user_id] = []
     await m.reply_text("✅ Tous les fichiers ont été traités !")
@@ -119,12 +118,10 @@ async def seq_stop(bot, m):
 async def handle_file(bot, m):
     user_id = m.from_user.id
 
-    # Si on est en mode séquence, on stocke seulement
     if sequence_mode.get(user_id):
         sequence_files[user_id].append(m)
         await m.reply_text("📥 Fichier ajouté à la séquence.")
     else:
-        # Sinon, traiter immédiatement
         await handle_individual_file(bot, m)
 
 
@@ -137,7 +134,6 @@ async def handle_individual_file(bot, m):
     msg = await m.reply("📥 **Downloading Started...**")
     msg.c_time = time.time()
 
-    # Télécharger le fichier et afficher la barre de progression
     file_dl_path = await bot.download_media(
         message=m,
         progress=progress_bar,
@@ -147,7 +143,6 @@ async def handle_individual_file(bot, m):
     await msg.edit("🚀 Uploading file... Please wait!")
     msg.c_time = time.time()
 
-    # Envoyer le fichier téléchargé
     if m.document:
         await bot.send_document(
             chat_id=m.chat.id,
@@ -168,17 +163,16 @@ async def handle_individual_file(bot, m):
             progress_args=(msg, "Uploading")
         )
 
-    # Supprimer le fichier après l'envoi
     await msg.delete()
     os.remove(file_dl_path)
 
 
 async def main():
-    await asyncio.sleep(5)  # attendre pour synchroniser l'heure serveur
     await Bot.start()
-    print("Bot is running...")
-    await Bot.idle()
-
+    print("Bot Started Successfully.")
+    await idle()
+    await Bot.stop()
 
 if __name__ == "__main__":
+    from pyrogram import idle
     asyncio.run(main())
