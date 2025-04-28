@@ -8,7 +8,7 @@ from pyromod import listen
 
 # Fonction pour corriger le temps au démarrage
 async def fix_time():
-    await asyncio.sleep(5)
+    await asyncio.sleep(5)  # Attente de 5 secondes pour garantir la synchronisation du temps
 
 # Paramètres d'authentification Telegram
 BOT_TOKEN = "7634028476:AAHDjeRCagDKlxtVmRV3SoBBRgAG4nG0tbw"
@@ -190,6 +190,12 @@ async def handle_individual_file(bot, m):
 
 
 # Exécution du bot avec asyncio
-time.sleep(5)  # Attendre 5 secondes pour que le serveur synchronise son temps
+async def main():
+    # Correction du temps avant de démarrer
+    await fix_time()
 
-Bot.run()
+    # Démarrage du bot
+    await Bot.start()
+
+if __name__ == "__main__":
+    asyncio.run(main())
