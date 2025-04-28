@@ -179,39 +179,53 @@ async def process_file(client, command_message, file_message, counter, total_fil
     async with semaphore:
         while paused_users.get(user_id, False) or cancelled_users.get(user_id, False):
             await asyncio.sleep(1)
-        
-        file_path = await file_message.download(file_name=f"downloads/file_{random.randint(1,99999)}")
+
+        # Télécharger le fichier
+        try:
+            file_path = await file_message.download(file_name=f"downloads/file_{random.randint(1,99999)}")
+            print(f"[DEBUG] Fichier téléchargé : {file_path}")
+        except Exception as e:
+            print(f"[ERROR] Erreur lors du téléchargement du fichier : {e}")
+            return
+
         thumb_list = user_thumbnails.get(user_id, [])
         thumb_path = thumb_list[(counter - 1) % len(thumb_list)] if thumb_list else None
 
         base_name = os.path.basename(file_path)
         name, ext = os.path.splitext(base_name)
-        
+
         # Remplacer les mots dans le nom
         for search, replace in replace_rules.get(user_id, []):
             name = name.replace(search, replace)
-        
+
         new_name = f"downloads/{name}{ext}"
         os.rename(file_path, new_name)
+        print(f"[DEBUG] Nouveau nom de fichier : {new_name}")
 
-        # Si progress_message existe, on l'édite
+        # Mise à jour du message de progression
         if progress_message:
-            await progress_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter/total_files*100)}%)")
+            await progress_message.edit(f"📦 {counter}/{total_files} fichiers traités... ({int(counter / total_files * 100)}%)")
 
         # Vérifier que l'utilisateur n'est pas le bot avant d'envoyer le fichier
-        if user_id != client.me.id:  # Utilisation de client.me.id pour l'ID du bot
-            # Renvoi du fichier modifié
-            await client.send_document(user_id, new_name, caption="Fichier modifié avec succès.")
-        else:
-            # Si l'utilisateur est le bot, ignorer l'envoi du fichier
-            await progress_message.edit("❌ Impossible d'envoyer un fichier à soi-même.")
+        try:
+            if user_id != client.me.id:  # Utilisation de client.me.id pour l'ID du bot
+                print(f"[DEBUG] Envoi du fichier à l'utilisateur : {user_id}")
+                await client.send_document(user_id, new_name, caption="Fichier modifié avec succès.")
+            else:
+                print("[DEBUG] Impossible d'envoyer un fichier à soi-même.")
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de l'envoi du fichier : {e}")
 
         # Mise à jour du message de progression
         if progress_message:
             await progress_message.edit(f"⏳ {counter}/{total_files} fichiers traités...")
 
         # Suppression du fichier après l'envoi
-        os.remove(new_name)
+        try:
+            os.remove(new_name)
+            print(f"[DEBUG] Fichier supprimé : {new_name}")
+        except Exception as e:
+            print(f"[ERROR] Erreur lors de la suppression du fichier : {e}")
 
 # -- LANCER LE BOT --
 
