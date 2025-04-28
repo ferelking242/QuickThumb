@@ -137,22 +137,26 @@ async def exec_seq(client, message: Message):
 
 @app.on_callback_query()
 async def callback_exec_seq(client, callback_query):
-    seq_name = callback_query.data.split("_")[1]
-    user_id = callback_query.from_user.id
-    seq_files = user_seq_files.get(user_id, {}).get(seq_name, [])
+    # Vérifier que le callback_data contient le bon format
+    if callback_query.data.startswith("exec_"):
+        seq_name = callback_query.data.split("_")[1]
+        user_id = callback_query.from_user.id
+        seq_files = user_seq_files.get(user_id, {}).get(seq_name, [])
 
-    if seq_files:
-        progress_message = await callback_query.message.reply(f"📦 Début du traitement de la séquence '{seq_name}'...")
+        if seq_files:
+            progress_message = await callback_query.message.reply(f"📦 Début du traitement de la séquence '{seq_name}'...")
 
-        for idx, file_message in enumerate(seq_files):
-            # Envoie un nouveau message pour chaque fichier
-            progress_msg = await callback_query.message.reply(f"📦 Traitement du fichier {idx + 1}/{len(seq_files)}...")
+            for idx, file_message in enumerate(seq_files):
+                # Envoie un nouveau message pour chaque fichier
+                progress_msg = await callback_query.message.reply(f"📦 Traitement du fichier {idx + 1}/{len(seq_files)}...")
 
-            await process_file(client, callback_query.message, file_message, idx + 1, len(seq_files), progress_msg, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
+                await process_file(client, callback_query.message, file_message, idx + 1, len(seq_files), progress_msg, asyncio.Semaphore(MAX_CONCURRENT_TASKS))
 
-        await progress_message.edit(f"✅ Séquence '{seq_name}' exécutée avec succès.")
+            await progress_message.edit(f"✅ Séquence '{seq_name}' exécutée avec succès.")
+        else:
+            await callback_query.message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
     else:
-        await callback_query.message.reply(f"❌ Aucune séquence trouvée avec le nom '{seq_name}'.")
+        await callback_query.message.reply("❌ Option invalide.")
 
 @app.on_message(filters.document | filters.video | filters.photo & filters.private)
 async def handle_files(client, message: Message):
