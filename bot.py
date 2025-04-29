@@ -6,10 +6,6 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyromod import listen
 
-# Fonction pour corriger le temps au démarrage
-async def fix_time():
-    await asyncio.sleep(5)  # Attente de 5 secondes pour garantir la synchronisation du temps
-
 # Paramètres d'authentification Telegram
 BOT_TOKEN = "7634028476:AAHDjeRCagDKlxtVmRV3SoBBRgAG4nG0tbw"
 API_ID = "23992653"
@@ -23,9 +19,6 @@ Bot = Client(
     api_hash=API_HASH,
     workdir=".", 
     in_memory=True,
-    takeout=None,
-    test_mode=False,
-    sleep_threshold=60,
 )
 
 # Texte de démarrage du bot
@@ -70,7 +63,6 @@ async def progress_bar(current, total, message, task="Uploading"):
 ╰━━━━━━━━━━━━━━━➣
 `{bar}`
 """
-
     try:
         await message.edit(text)
     except:
@@ -143,7 +135,7 @@ async def handle_file(bot, m):
         await handle_individual_file(bot, m)
 
 
-# Fonction pour traiter un fichier individuellement (image, vidéo, document)
+# Fonction pour traiter un fichier individuellement
 async def handle_individual_file(bot, m):
     global thumb_path
     if not thumb_path:
@@ -189,13 +181,13 @@ async def handle_individual_file(bot, m):
     os.remove(file_dl_path)
 
 
-# Exécution du bot avec asyncio
+# Fonction principale pour démarrer le bot avec une synchronisation correcte
 async def main():
-    # Correction du temps avant de démarrer
-    await fix_time()
-
-    # Démarrage du bot
+    print("⌛ Synchronisation de l'heure...")
+    await asyncio.sleep(10)  # Attendre pour s'assurer que l'heure du serveur est bien synchronisée
+    print("🚀 Démarrage du bot...")
     await Bot.start()
+    await Bot.idle()
 
 if __name__ == "__main__":
     asyncio.run(main())
