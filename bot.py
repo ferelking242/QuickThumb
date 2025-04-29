@@ -17,7 +17,7 @@ Bot = Client(
     bot_token=BOT_TOKEN,
     api_id=API_ID,
     api_hash=API_HASH,
-    workdir=".", 
+    workdir=".",
     in_memory=True,
 )
 
@@ -102,7 +102,7 @@ async def seq_stop(bot, m):
     if not sequence_mode.get(user_id):
         await m.reply_text("⚠️ Vous n'avez pas démarré de séquence. Tapez `/seq_start` d'abord.")
         return
-    
+
     files = sequence_files.get(user_id, [])
     if not files:
         await m.reply_text("⚠️ Aucun fichier à traiter.")
@@ -181,13 +181,18 @@ async def handle_individual_file(bot, m):
     os.remove(file_dl_path)
 
 
-# Fonction principale pour démarrer le bot avec une synchronisation correcte
-async def main():
+# Fonction principale avec synchronisation de l'heure
+async def synchronize_time():
     print("⌛ Synchronisation de l'heure...")
-    await asyncio.sleep(10)
+    os.system("apk add --no-cache busybox-extras")  # Installer ntpd
+    os.system("ntpd -d -q -n pool.ntp.org")         # Synchroniser
+    await asyncio.sleep(5)
+
+async def main():
+    await synchronize_time()
     print("🚀 Démarrage du bot...")
     await Bot.start()
-    await Bot.idle()  # <-- Cette ligne permet au bot de rester en vie
+    await Bot.idle()
 
 if __name__ == "__main__":
     asyncio.run(main())
