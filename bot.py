@@ -184,10 +184,10 @@ async def handle_individual_file(bot, m):
 # Fonction principale pour démarrer le bot avec une synchronisation correcte
 async def main():
     print("⌛ Synchronisation de l'heure...")
-    await asyncio.sleep(10)  # Attendre pour s'assurer que l'heure du serveur est bien synchronisée
+    await asyncio.sleep(10)
     print("🚀 Démarrage du bot...")
     await Bot.start()
-    await Bot.idle()
+    await Bot.idle()  # <-- Cette ligne permet au bot de rester en vie
 
 if __name__ == "__main__":
     asyncio.run(main())
