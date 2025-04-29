@@ -181,18 +181,11 @@ async def handle_individual_file(bot, m):
     os.remove(file_dl_path)
 
 
-# Fonction principale avec synchronisation de l'heure
-async def synchronize_time():
-    print("⌛ Synchronisation de l'heure...")
-    os.system("apk add --no-cache busybox-extras")  # Installer ntpd
-    os.system("ntpd -d -q -n pool.ntp.org")         # Synchroniser
-    await asyncio.sleep(5)
-
+# Fonction principale sans synchronisation de l'heure
 async def main():
-    await synchronize_time()
     print("🚀 Démarrage du bot...")
     await Bot.start()
-    await Bot.idle()
+    await Bot.idle()  # <-- Cette ligne permet au bot de rester en vie
 
 if __name__ == "__main__":
     asyncio.run(main())
