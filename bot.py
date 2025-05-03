@@ -9,10 +9,9 @@ from dotenv import load_dotenv
 
 # Chargement des variables d'environnement
 load_dotenv()
-
-API_ID = "23992653"
-API_HASH = "ef7ad3a6a3e88b487108cd5242851ed4"
-BOT_TOKEN = "7634028476:AAHDjeRCagDKlxtVmRV3SoBBRgAG4nG0tbw"
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 app = Client("rename_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -44,7 +43,6 @@ async def progress_bar(current, total, message, status="Uploading"):
 ┣⪼ ⏰️ Eᴛᴀ: {int(eta)}s
 ╰━━━━━━━━━━━━━━━➣
 {bar}"""
-
     try:
         await message.edit(text)
     except:
@@ -58,8 +56,9 @@ async def start(client, message):
 
 @app.on_message(filters.command("seq_start"))
 async def start_sequence(client, message):
-    global SEQUENCE_MODE, RECEIVED_FILES
+    global SEQUENCE_MODE, RECEIVED_FILES, RENAME_MODE
     SEQUENCE_MODE = True
+    RENAME_MODE = False
     RECEIVED_FILES = []
     await message.reply("✅ Séquence démarrée. Envoyez vos fichiers maintenant.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Stop", callback_data="stop_seq")]]))
 
@@ -67,8 +66,11 @@ async def start_sequence(client, message):
 async def stop_sequence(client, message):
     global SEQUENCE_MODE, RENAME_MODE
     SEQUENCE_MODE = False
-    RENAME_MODE = True
-    await message.reply("🛑 Séquence arrêtée. Envoyez le nom souhaité. Exemple :\nExemple : baby {1} VF")
+    if RECEIVED_FILES:
+        RENAME_MODE = True
+        await message.reply("🛑 Séquence arrêtée. Envoyez le nom souhaité. Exemple :\nExemple : baby {1} VF")
+    else:
+        await message.reply("❌ Aucun fichier reçu pendant la séquence.")
 
 @app.on_message(filters.command("stop"))
 async def stop_copy(client, message):
@@ -154,8 +156,7 @@ async def process_rename(client, message):
 
     template = message.text.strip()
     
-    if RECEIVED_FILES:
-        # Séquence multiple
+    if RENAME_MODE and RECEIVED_FILES:
         if "{1}" in template:
             RENAME_INFO = {"template": template, "ep": 1}
             await process_files(client, message)
@@ -164,13 +165,11 @@ async def process_rename(client, message):
         return
 
     if PENDING_FILE:
-        # Un seul fichier
         media = PENDING_FILE.document or PENDING_FILE.video
         ext = os.path.splitext(media.file_name)[1]
         if not template.endswith(ext):
             template += ext
-
-        await process_file(client, message, PENDING_FILE, manual=True)
+        await process_file(client, message, PENDING_FILE, manual=True, new_name=template)
         PENDING_FILE = None
         return
 
@@ -183,56 +182,42 @@ async def send_with_progress(client, msg, filename=None):
     if not name_to_send.endswith(original_ext):
         name_to_send += original_ext
 
-    path = await msg.download(progress=lambda c, t: None)
-
-    # Choisir l'envoi selon le type de fichier
-    if SEND_AS_VIDEO and msg.video:
-        send_func = client.send_video
-    else:
-        send_func = client.send_document
-
+    path = await msg.download()
     progress_msg = await msg.reply("⬇️ Téléchargement...")
-    await client.send_chat_action(msg.chat.id, ChatAction.UPLOAD_DOCUMENT)
-    
-    # Fonction pour afficher la progression du téléchargement
-    async def download_progress(current, total):
-        await progress_bar(current, total, progress_msg, status="Downloading")
 
-    # Envoi du fichier
-    if msg.video:
-        await send_func(
-            chat_id=msg.chat.id,
-            video=path,
-            file_name=name_to_send,
-            thumb=CURRENT_THUMB,
-            progress=download_progress
-        )
-    elif msg.document:
-        await send_func(
-            chat_id=msg.chat.id,
-            document=path,
-            file_name=name_to_send,
-            thumb=CURRENT_THUMB,
-            progress=download_progress
-        )
+    await client.send_chat_action(msg.chat.id, ChatAction.UPLOAD_DOCUMENT)
+
+    kwargs = {
+        "chat_id": msg.chat.id,
+        "file_name": name_to_send,
+        "progress": lambda c, t: asyncio.create_task(progress_bar(c, t, progress_msg, status="Uploading"))
+    }
+
+    if CURRENT_THUMB:
+        kwargs["thumb"] = CURRENT_THUMB
+
+    try:
+        if SEND_AS_VIDEO and msg.video:
+            await client.send_video(video=path, **kwargs)
+        else:
+            await client.send_document(document=path, **kwargs)
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
 
     await progress_msg.edit_text("✅ Fichier envoyé.")
-    os.remove(path)
 
 async def process_files(client, message):
-    """Processing multiple files in sequence"""
-    global RECEIVED_FILES  # Ajoutez cette ligne pour accéder à la variable globale
-    for idx, msg in enumerate(RECEIVED_FILES):
+    global RECEIVED_FILES, RENAME_INFO
+    for msg in RECEIVED_FILES:
         file_name = RENAME_INFO['template'].replace("{1}", str(RENAME_INFO["ep"]))
         await send_with_progress(client, msg, file_name)
         RENAME_INFO["ep"] += 1
-    RECEIVED_FILES = []  # Réinitialisation de la liste après traitement
+    RECEIVED_FILES = []
 
-async def process_file(client, message, file, manual=False):
-    """Process a single file with renaming"""
+async def process_file(client, message, file, manual=False, new_name=None):
     if manual:
-        await send_with_progress(client, file)
+        await send_with_progress(client, file, new_name)
 
-# Exécution de l'application (la boucle principale)
 if __name__ == "__main__":
     app.run()
